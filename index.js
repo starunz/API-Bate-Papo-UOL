@@ -96,3 +96,35 @@ app.get('/participants', async (req, res) => {
         res.status(500).send(error);
     }
 });
+
+
+app.get("/messages", async (req, res) => {
+    const mongoClient = new MongoClient(process.env.MONGO_URI);
+
+    try {
+        await mongoClient.connect();
+
+        const messages = await mongoClient
+        .db(process.env.MONGO_NAME)
+        .collection('messages')
+        .find({})
+        .toArray();
+
+        const filteredMessages = messages.filter(
+            (msg) =>
+            (msg.type === "private_message" && msg.to === req.headers.user) ||
+            msg.from === req.headers.user || msg.to === "Todos" || msg.type === "message"
+        );
+
+        if (req.query.limit) {
+            res.status(200).send(filteredMessages.slice(-req.query.limit));
+        } else {
+            res.status(200).send(filteredMessages);
+        }
+
+        mongoClient.close();
+    } catch (error) {
+        console.log(error)
+        res.status(500).send(error);
+    }
+});
