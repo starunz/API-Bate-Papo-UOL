@@ -20,6 +20,13 @@ const nameSchema = joi.object({
     name: joi.string().case('lower').required(),
 });
 
+const messageSchema = joi.object({
+    to: joi.string().required(),
+    text: joi.string().required(),
+    type: joi.string().required(),
+    from: joi.string().required(),
+});
+
 app.post('/participants', async (req, res) => {
     const mongoClient = new MongoClient(process.env.MONGO_URI);
   
@@ -97,8 +104,41 @@ app.get('/participants', async (req, res) => {
     }
 });
 
+app.post('/messages', async (req, res) => {
+    const mongoClient = new MongoClient(process.env.MONGO_URI);
+  
+    const validation = messageSchema.validate(req.body, { abortEarly: false });
+  
+    if (validation.error) {
+        const errors = validation.error.details.map(detail => detail.message);
+        res.status(422).send(errors);
+        return;
+    }
+  
+    try {
+        await mongoClient.connect();
 
-app.get("/messages", async (req, res) => {
+        await mongoClient
+        .db(process.env.MONGO_NAME)
+        .collection('messages')
+        .insertOne({
+          from: req.headers.user,
+          to: req.body.to,
+          text: req.body.text,
+          type: req.body.type,
+          time: `${dayjs().hour()}:${dayjs().minute()}:${dayjs().second()}`,
+        });
+
+        res.sendStatus(201);
+
+        mongoClient.close();
+    } catch (error) {
+        console.log(error)
+        res.status(500).send(error);
+    }
+});
+
+app.get('/messages', async (req, res) => {
     const mongoClient = new MongoClient(process.env.MONGO_URI);
 
     try {
@@ -111,9 +151,8 @@ app.get("/messages", async (req, res) => {
         .toArray();
 
         const filteredMessages = messages.filter(
-            (msg) =>
-            (msg.type === "private_message" && msg.to === req.headers.user) ||
-            msg.from === req.headers.user || msg.to === "Todos" || msg.type === "message"
+            msg => (msg.type === 'private_message' && msg.to === req.headers.user) ||
+            msg.from === req.headers.user || msg.to === 'Todos' || msg.type === 'message'
         );
 
         if (req.query.limit) {
