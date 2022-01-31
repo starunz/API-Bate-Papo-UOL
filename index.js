@@ -181,7 +181,7 @@ app.post('/status', async (req, res) => {
         .toArray();
     
         const user = participants.find(user => user.name === req.headers.user);
-        
+
         if (!user) {
             res.sendStatus(404);
 
@@ -206,3 +206,37 @@ app.post('/status', async (req, res) => {
         res.status(500).send(error);
     }
 });
+
+const removeInactiveUsers = () => {
+    const mongoClient = new MongoClient(process.env.MONGO_URI);
+
+    setInterval(async () => {
+        await mongoClient.connect();
+
+        try {
+            const db = mongoClient.db(process.env.MONGO_NAME);
+            const participantsCollection = db.collection('participants');
+            const messagesCollection = db.collection('messages');
+            const participants = await participantsCollection.find({}).toArray();
+    
+            participants.map(async user => {
+                if (Date.now() - user.lastStatus > 10000) {
+                    await participantsCollection.deleteOne({ _id: user._id });
+                    await messagesCollection.insertOne({
+                        from: user.name,
+                        to: 'Todos',
+                        text: 'sai da sala...',
+                        type: "status",
+                        time: `${dayjs().hour()}:${dayjs().minute()}:${dayjs().second()}`,
+                    });
+                }
+            });
+
+            mongoClient.close();
+        } catch (error) {
+            console.log(error);
+        }
+    }, 15000);
+}
+
+removeInactiveUsers();
