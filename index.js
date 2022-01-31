@@ -167,3 +167,42 @@ app.get('/messages', async (req, res) => {
         res.status(500).send(error);
     }
 });
+
+app.post('/status', async (req, res) => {
+    const mongoClient = new MongoClient(process.env.MONGO_URI);
+
+    try {
+        await mongoClient.connect();
+
+        const participants = await mongoClient
+        .db(process.env.MONGO_NAME)
+        .collection('participants')
+        .find({})
+        .toArray();
+    
+        const user = participants.find(user => user.name === req.headers.user);
+        
+        if (!user) {
+            res.sendStatus(404);
+
+            mongoClient.close();
+        } else {
+            await mongoClient
+            .db(process.env.MONGO_NAME)
+            .collection('participants')
+            .updateOne(
+                { name: user.name },
+                {
+                    $set: { lastStatus: Date.now() },
+                }
+            );
+
+            res.sendStatus(200);
+            
+            mongoClient.close();
+        }
+    } catch (error) {
+        console.log(error)
+        res.status(500).send(error);
+    }
+});
